@@ -5,11 +5,25 @@ from apps.orders.models import Order
 from apps.orders.serializers import OrderDetailSerializer, OrderCreateSerializer
 from apps.orders.services import OrderPlacementService
 from apps.orders.tasks import export_tenant_orders_csv, dispatch_external_webhook
+from apps.users.permissions import HasTenantPermission  # 👈 Added our new guard
 from django.core.exceptions import ValidationError
 
 class OrderViewSet(viewsets.ModelViewSet):
     """API viewset for reading historical invoices and securely dispatching wholesale B2B orders."""
     queryset = Order.objects.all()
+    
+    # 🔒 Assign permissions and explicitly map granular permissions to each action
+    permission_classes = [HasTenantPermission]
+    action_permissions = {
+        'list': 'orders:view',
+        'retrieve': 'orders:view',
+        'create': 'orders:create',
+        'trigger_bulk_report_export': 'orders:export_report' # Custom fine-grained power
+    }
+    
+    def get_queryset(self):
+        # Enforce strict multi-tenant data isolation at the ORM layer
+        return Order.objects.filter(tenant=self.request.user.tenant)
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -30,7 +44,6 @@ class OrderViewSet(viewsets.ModelViewSet):
             )
             
             # 2. 🔥 FIRE AND FORGET WEBHOOK: Offload downstream network operations to Celery
-            # In a real system, you would fetch the URL from a TenantSettings model table.
             mock_tenant_webhook_url = "https://tenant-external-erp-system.com/webhooks/orders"
             
             dispatch_external_webhook.delay(
@@ -61,4 +74,4 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Response({
             "status": "Asynchronous compilation job successfully initialized.",
             "message": f"A secure download link will be dispatched to {target_email} upon completion."
-        }, status=status.HTTP_202_ACCEPTED) # 202 = Accepted for background processing
+        }, status=status.HTTP_202_ACCEPTED)

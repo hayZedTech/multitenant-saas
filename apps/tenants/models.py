@@ -4,29 +4,32 @@ from apps.tenants.utils import get_current_tenant
 from django.core.exceptions import ValidationError
 
 class Tenant(models.Model):
-    name=models.CharField(max_length=255)
-    owner_domain=models.CharField(max_length=255)
-    is_active=models.BooleanField(default=True)
-    created_at=models.DateTimeField(auto_now_add=True)
+    name = models.CharField(max_length=255)
+    owner_domain = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
-    
+
 
 class User(AbstractUser):
+    """ Your single, authoritative Custom User Model """
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="users", blank=True, null=True)
     is_tenant_admin = models.BooleanField(default=False)
+    
+    #  Using string syntax 'users.Role' breaks the circular import dependency
+    role = models.ForeignKey('users.Role', on_delete=models.SET_NULL, related_name="users", blank=True, null=True)
 
     def __str__(self):
-        return f"{self.username} {self.tenant.name if self.tenant else "Global Admin"}"
-    
+        return f"{self.username} | {self.tenant.name if self.tenant else 'Global Admin'}"
 
 class TenantQuerySet(models.QuerySet):
     def filter(self, *args, **kwargs):
         current_tenant = get_current_tenant()
         if current_tenant:
             kwargs["tenant"] = current_tenant
-        return super().save(*args, **kwargs)
+        return super().filter(*args, **kwargs)
     
 
 class TenantManager(models.Manager):
@@ -34,7 +37,7 @@ class TenantManager(models.Manager):
         current_tenant=get_current_tenant()
         base_queryset = TenantQuerySet(self.model, using=self._db)
         if current_tenant:
-            return base_queryset(tenant=current_tenant)
+            return base_queryset.filter(tenant=current_tenant)
         return base_queryset
 
 

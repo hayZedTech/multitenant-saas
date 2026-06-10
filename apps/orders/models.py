@@ -2,21 +2,27 @@ from django.db import models
 from apps.tenants.models import TenantModel
 from apps.inventory.models import Product, Warehouse
 
-class Customer(TenantModel):
-    """Represents a corporate B2B buyer purchasing goods from the active tenant."""
+
+class Customer(TenantModel): 
+    """
+    The master B2B Customer profile, now fully tenant-isolated and 
+    extended with your required operational fields.
+    """
     company_name = models.CharField(max_length=255)
     email = models.EmailField()
-    phone = models.CharField(max_length=50, blank=True, null=True)
-    tier_discount_percentage = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0.00, 
-        help_text="Custom wholesale percentage discount automatically applied to this buyer's orders"
-    )
+    tier_discount_percentage = models.PositiveIntegerField(default=0)
+    
+    # ➕ Adding your missing operational fields securely
+    contact_name = models.CharField(max_length=255, blank=True, null=True)
+    phone_number = models.CharField(max_length=50, blank=True, null=True)
+    shipping_address = models.TextField(blank=True, null=True)
 
     class Meta:
-        unique_together = ('tenant', 'email')
+        # Enforces unique company names *per business instance*
+        unique_together = ('tenant', 'company_name')
 
     def __str__(self):
-        return self.company_name
+        return f"{self.company_name} | {self.email}"
 
 
 class Order(TenantModel):
